@@ -5,7 +5,7 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 
-	"spacesim/game"
+	"spacesim/sim"
 )
 
 const (
@@ -17,7 +17,7 @@ func main() {
 	ebiten.SetWindowSize(screenWidth, screenHeight)
 	ebiten.SetWindowTitle("Space Simulator")
 
-	if err := ebiten.RunGame(game.New(screenWidth, screenHeight)); err != nil {
+	if err := ebiten.RunGame(sim.New(screenWidth, screenHeight)); err != nil {
 		log.Fatal(err)
 	}
 }

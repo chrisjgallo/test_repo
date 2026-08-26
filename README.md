@@ -24,10 +24,10 @@ go run .
 | Path | Holds |
 | ---- | ----- |
 | `world/` | Simulation state and physics.  Knows nothing about drawing. |
-| `game/` | Ebitengine glue: input in, pixels out. |
+| `sim/` | Ebitengine glue: input in, pixels out. |
 | `main.go` | Window setup and the call into Ebitengine's run loop. |
 
-Ebitengine owns the frame loop, so instead of an explicit draw-begin/draw-end sequence there are `Update` and `Draw` methods on `game.Game`.
+Ebitengine owns the frame loop, so instead of an explicit draw-begin/draw-end sequence there are `Update` and `Draw` methods on `sim.Simulator`.
 
 #### Dev Todo list
 

@@ -1,5 +1,5 @@
-// Package game wires the simulation to Ebitengine: input in, pixels out.
-package game
+// Package sim drives the world with Ebitengine: input in, pixels out.
+package sim
 
 import (
 	"image/color"
@@ -19,9 +19,9 @@ const (
 // red matches raylib's RED, so the pause indicator looks like it did before.
 var red = color.RGBA{R: 230, G: 41, B: 55, A: 255}
 
-// Game satisfies ebiten.Game. Ebitengine calls Update on a fixed 60 Hz tick and
-// Draw once per frame.
-type Game struct {
+// Simulator satisfies ebiten.Game. Ebitengine calls Update on a fixed 60 Hz tick
+// and Draw once per frame.
+type Simulator struct {
 	world *world.World
 
 	screenWidth  int
@@ -31,9 +31,9 @@ type Game struct {
 	cornerOfScreenY float32
 }
 
-// New builds a game with an empty world sized to the screen.
-func New(screenWidth, screenHeight int) *Game {
-	return &Game{
+// New builds a simulator with an empty world sized to the screen.
+func New(screenWidth, screenHeight int) *Simulator {
+	return &Simulator{
 		world:           world.New(screenWidth, screenHeight),
 		screenWidth:     screenWidth,
 		screenHeight:    screenHeight,
@@ -42,25 +42,25 @@ func New(screenWidth, screenHeight int) *Game {
 	}
 }
 
-func (g *Game) Update() error {
-	g.handleUserInput()
-	g.world.UpdateSpace()
+func (s *Simulator) Update() error {
+	s.handleUserInput()
+	s.world.UpdateSpace()
 	return nil
 }
 
-func (g *Game) Draw(screen *ebiten.Image) {
+func (s *Simulator) Draw(screen *ebiten.Image) {
 	screen.Fill(color.Black)
-	g.drawSpace(screen)
-	g.drawMenusAndInfo(screen)
+	s.drawSpace(screen)
+	s.drawMenusAndInfo(screen)
 }
 
 // Layout keeps the simulation at a fixed resolution regardless of window size.
-func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
-	return g.screenWidth, g.screenHeight
+func (s *Simulator) Layout(outsideWidth, outsideHeight int) (int, int) {
+	return s.screenWidth, s.screenHeight
 }
 
-func (g *Game) drawSpace(screen *ebiten.Image) {
-	for _, object := range g.world.Objects {
+func (s *Simulator) drawSpace(screen *ebiten.Image) {
+	for _, object := range s.world.Objects {
 		vector.DrawFilledCircle(
 			screen,
 			float32(object.X),
@@ -72,13 +72,13 @@ func (g *Game) drawSpace(screen *ebiten.Image) {
 	}
 }
 
-func (g *Game) drawMenusAndInfo(screen *ebiten.Image) {
-	if !g.world.Paused {
+func (s *Simulator) drawMenusAndInfo(screen *ebiten.Image) {
+	if !s.world.Paused {
 		return
 	}
 
-	vector.DrawFilledRect(screen, g.cornerOfScreenX, g.cornerOfScreenY,
+	vector.DrawFilledRect(screen, s.cornerOfScreenX, s.cornerOfScreenY,
 		pauseBarWidth, pauseBarHeight, red, false)
-	vector.DrawFilledRect(screen, g.cornerOfScreenX+spaceBetweenPauseBars, g.cornerOfScreenY,
+	vector.DrawFilledRect(screen, s.cornerOfScreenX+spaceBetweenPauseBars, s.cornerOfScreenY,
 		pauseBarWidth, pauseBarHeight, red, false)
 }

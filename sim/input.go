@@ -1,18 +1,18 @@
-package game
+package sim
 
 import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 )
 
-func (g *Game) handleUserInput() {
+func (s *Simulator) handleUserInput() {
 	// check if mouse is clicked
 	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
 		x, y := ebiten.CursorPosition()
-		g.world.Spawn(float64(x), float64(y))
+		s.world.Spawn(float64(x), float64(y))
 	}
 
 	if inpututil.IsKeyJustPressed(ebiten.KeySpace) {
-		g.world.TogglePause()
+		s.world.TogglePause()
 	}
 }
