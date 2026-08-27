@@ -66,3 +66,44 @@ func TestPausedWorldDoesNotMove(t *testing.T) {
 		}
 	}
 }
+
+func TestSpawnMovingKeepsInitialVelocity(t *testing.T) {
+	w := New(1000, 1000)
+	w.SpawnMoving(500, 500, 3, -2)
+
+	object := w.Objects[0]
+	if object.VelocityX != 3 || object.VelocityY != -2 {
+		t.Errorf("want velocity (3, -2), got (%v, %v)", object.VelocityX, object.VelocityY)
+	}
+
+	// A lone object drifts along that velocity with nothing to pull on it.
+	w.UpdateSpace()
+
+	if got := w.Objects[0].X; got != 503 {
+		t.Errorf("want x 503 after one step, got %v", got)
+	}
+	if got := w.Objects[0].Y; got != 498 {
+		t.Errorf("want y 498 after one step, got %v", got)
+	}
+}
+
+func TestTotalMassSurvivesACollision(t *testing.T) {
+	w := New(1000, 1000)
+	w.Spawn(500, 500)
+	w.Spawn(505, 500)
+	w.Spawn(100, 100)
+
+	if got := w.TotalMass(); got != 3*defaultMass {
+		t.Errorf("want starting mass %v, got %v", 3*defaultMass, got)
+	}
+
+	w.UpdateSpace() // the close pair merges
+	w.UpdateSpace() // the absorbed object is swept up
+
+	if len(w.Objects) != 2 {
+		t.Fatalf("want 2 objects after the merge, got %d", len(w.Objects))
+	}
+	if got := w.TotalMass(); got != 3*defaultMass {
+		t.Errorf("merging should conserve mass, want %v, got %v", 3*defaultMass, got)
+	}
+}

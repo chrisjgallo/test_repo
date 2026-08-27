@@ -53,31 +53,57 @@ func (o *SpaceObject) absorb(other *SpaceObject) {
 	other.Mass = 0
 }
 
-// World is the simulated space and everything in it.
+// World is the simulated space and everything in it. It is measured in world
+// units, which have nothing to do with the size of the window looking at it --
+// the world is free to be much larger than the screen.
 type World struct {
 	Objects []SpaceObject
 	Paused  bool
 
-	screenWidth  float64
-	screenHeight float64
+	width  float64
+	height float64
 }
 
-// New returns an empty world sized to the screen it will be drawn on.
-func New(screenWidth, screenHeight int) *World {
+// New returns an empty world of the given size.
+func New(width, height int) *World {
 	return &World{
-		screenWidth:  float64(screenWidth),
-		screenHeight: float64(screenHeight),
+		width:  float64(width),
+		height: float64(height),
 	}
 }
 
-// Spawn adds a new object at the given position.
+// Width is how far the world stretches horizontally before it wraps.
+func (w *World) Width() float64 { return w.width }
+
+// Height is how far the world stretches vertically before it wraps.
+func (w *World) Height() float64 { return w.height }
+
+// Spawn adds a new object at rest at the given position.
 func (w *World) Spawn(x, y float64) {
+	w.SpawnMoving(x, y, 0, 0)
+}
+
+// SpawnMoving adds a new object at the given position, already travelling at
+// the given velocity.
+func (w *World) SpawnMoving(x, y, velocityX, velocityY float64) {
 	w.Objects = append(w.Objects, SpaceObject{
-		X:      x,
-		Y:      y,
-		Radius: defaultRadius,
-		Mass:   defaultMass,
+		X:         x,
+		Y:         y,
+		Radius:    defaultRadius,
+		VelocityX: velocityX,
+		VelocityY: velocityY,
+		Mass:      defaultMass,
 	})
+}
+
+// TotalMass is the mass of everything in the world added together. Merging
+// conserves it, so it only ever changes when something new is spawned.
+func (w *World) TotalMass() float64 {
+	var total float64
+	for _, object := range w.Objects {
+		total += object.Mass
+	}
+	return total
 }
 
 // TogglePause freezes or resumes the simulation. Objects can still be added
@@ -153,15 +179,15 @@ func (w *World) handleObjectVelocityAndGravity() {
 
 func (w *World) wrapAroundEdges(object *SpaceObject) {
 	if object.X < -roomForError {
-		object.X = w.screenWidth - roomForError
+		object.X = w.width - roomForError
 	}
-	if object.X > w.screenWidth+roomForError {
+	if object.X > w.width+roomForError {
 		object.X = roomForError
 	}
 	if object.Y < -roomForError {
-		object.Y = w.screenHeight - roomForError
+		object.Y = w.height - roomForError
 	}
-	if object.Y > w.screenHeight+roomForError {
+	if object.Y > w.height+roomForError {
 		object.Y = roomForError
 	}
 }
