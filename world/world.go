@@ -75,6 +75,15 @@ func (o *SpaceObject) absorb(other *SpaceObject) {
 // them bouncing apart; a feeble one merges them into a single object, the way
 // every collision used to.
 func collide(object, other *SpaceObject, distance float64) {
+	// Nothing here survives a zero mass: it divides through the bounce impulse
+	// and the momentum averages of a merge alike, and the NaN it leaves behind
+	// spreads to every object either one touches from then on. Callers skip
+	// objects already marked for removal, so this only holds the line if one
+	// ever stops doing so.
+	if object.Mass <= 0 || other.Mass <= 0 {
+		return
+	}
+
 	// Two objects in exactly the same spot have no direction to bounce along.
 	if distance == 0 {
 		object.absorb(other)
