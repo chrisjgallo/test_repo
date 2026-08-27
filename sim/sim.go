@@ -2,9 +2,11 @@
 package sim
 
 import (
+	"fmt"
 	"image/color"
 
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/hajimehoshi/ebiten/v2/vector"
 
 	"spacesim/world"
@@ -14,6 +16,14 @@ const (
 	pauseBarWidth         = 20
 	pauseBarHeight        = 100
 	spaceBetweenPauseBars = 30
+
+	// boundaryLabelDuration is how many ticks the boundary mode stays on screen
+	// after it is switched. Long enough to read at 60 ticks a second, short
+	// enough that the view goes back to being nothing but space.
+	boundaryLabelDuration = 120
+
+	// boundaryLabelMargin insets that label from the top left corner.
+	boundaryLabelMargin = 10
 )
 
 // red matches raylib's RED, so the pause indicator looks like it did before.
@@ -29,6 +39,11 @@ type Simulator struct {
 
 	cornerOfScreenX float32
 	cornerOfScreenY float32
+
+	// boundaryLabelTicks counts down the announcement of a boundary switch.
+	// Without it the three modes are indistinguishable until something happens
+	// to reach an edge.
+	boundaryLabelTicks int
 }
 
 // New builds a simulator with an empty world sized to the screen.
@@ -45,12 +60,20 @@ func New(screenWidth, screenHeight int) *Simulator {
 func (s *Simulator) Update() error {
 	s.handleUserInput()
 	s.world.UpdateSpace()
+
+	// The label is part of the interface, not the simulation, so it keeps
+	// fading even while the world is paused.
+	if s.boundaryLabelTicks > 0 {
+		s.boundaryLabelTicks--
+	}
+
 	return nil
 }
 
 func (s *Simulator) Draw(screen *ebiten.Image) {
 	screen.Fill(color.Black)
 	s.drawSpace(screen)
+	s.drawBoundaryLabel(screen)
 	s.drawMenusAndInfo(screen)
 }
 

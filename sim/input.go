@@ -15,4 +15,9 @@ func (s *Simulator) handleUserInput() {
 	if inpututil.IsKeyJustPressed(ebiten.KeySpace) {
 		s.world.TogglePause()
 	}
+
+	if inpututil.IsKeyJustPressed(ebiten.KeyB) {
+		s.world.CycleBoundary()
+		s.boundaryLabelTicks = boundaryLabelDuration
+	}
 }
