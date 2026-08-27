@@ -19,6 +19,13 @@ var colorRamp = []colorStop{
 	{radius: 16, color: color.RGBA{R: 235, G: 75, B: 50, A: 255}},
 }
 
+// starColor fills a fixed star. It sits off the end of the ramp rather than at
+// the top of it: a star's size says nothing about how much it has eaten, and it
+// should read as its own kind of thing rather than as the largest blob on
+// screen. Near-white with a warm cast, so it stays the brightest thing out
+// there however red the giants around it get.
+var starColor = color.RGBA{R: 255, G: 241, B: 200, A: 255}
+
 // colorStop pins a color to a radius. Anything between two stops is mixed from
 // the pair, and anything past the ends takes the end's color unchanged.
 type colorStop struct {

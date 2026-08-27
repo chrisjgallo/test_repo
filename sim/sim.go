@@ -87,8 +87,15 @@ type Simulator struct {
 
 // New builds a simulator looking at the middle of an empty world of the given
 // size. The world may be larger than the screen showing it.
-func New(screenWidth, screenHeight, worldWidth, worldHeight int) *Simulator {
+//
+// With centralStar set, the world is not quite empty: a fixed star sits at the
+// middle of it, so that objects spawned afterwards have something to fall
+// towards from the first tick instead of only each other.
+func New(screenWidth, screenHeight, worldWidth, worldHeight int, centralStar bool) *Simulator {
 	w := world.New(worldWidth, worldHeight)
+	if centralStar {
+		w.SpawnStar(w.Width()/2, w.Height()/2)
+	}
 
 	return &Simulator{
 		world:           w,
@@ -159,12 +166,18 @@ func (s *Simulator) drawSpace(screen *ebiten.Image) {
 			continue
 		}
 
+		// A star is not a pile of merged objects, so it is not colored like one.
+		fill := colorForRadius(object.Radius)
+		if object.Fixed {
+			fill = starColor
+		}
+
 		vector.DrawFilledCircle(
 			screen,
 			float32(x),
 			float32(y),
 			float32(radius),
-			colorForRadius(object.Radius),
+			fill,
 			true, // antialias -- small objects look like specks without it
 		)
 	}
@@ -246,9 +259,16 @@ func (s *Simulator) drawStats(screen *ebiten.Image) {
 // quickest read on how much merging has happened. It rescans on every call, but
 // the only caller is the paused readout -- so the scan happens exactly when the
 // physics loop is idle, which is cheaper than keeping a cached value honest.
+//
+// Stars sit it out. One starts larger than any amount of merging is likely to
+// reach, so counting it would pin the number to the star and say nothing about
+// what the rest of the world has been doing.
 func (s *Simulator) largestRadius() float64 {
 	var largest float64
 	for _, object := range s.world.Objects {
+		if object.Fixed {
+			continue
+		}
 		if object.Radius > largest {
 			largest = object.Radius
 		}
