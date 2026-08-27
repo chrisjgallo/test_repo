@@ -42,7 +42,8 @@ const (
 )
 
 // SpaceObject is a single body in the simulation. A mass of zero marks an object
-// that has been absorbed by another and is waiting to be swept up.
+// that is done for -- absorbed by another, or drifted out of the world -- and is
+// waiting to be swept up.
 type SpaceObject struct {
 	X, Y      float64
 	Radius    float64
@@ -202,6 +203,11 @@ func (w *World) Spawn(x, y float64) {
 	})
 }
 
+// CycleBoundary moves on to the next way of treating the edge of the world.
+func (w *World) CycleBoundary() {
+	w.Boundary = (w.Boundary + 1) % boundaryModeCount
+}
+
 // TogglePause freezes or resumes the simulation. Objects can still be added
 // while paused; they just don't move until time starts again.
 func (w *World) TogglePause() {
@@ -232,7 +238,7 @@ func (w *World) removeDestroyed() {
 
 func (w *World) handleObjectVelocityAndGravity() {
 	for i := range w.Objects {
-		w.wrapAroundEdges(&w.Objects[i])
+		w.applyBoundary(&w.Objects[i])
 	}
 
 	for i := range w.Objects {
@@ -272,6 +278,61 @@ func (w *World) handleObjectVelocityAndGravity() {
 
 		object.X += object.VelocityX
 		object.Y += object.VelocityY
+	}
+}
+
+// applyBoundary does whatever the current mode says to an object that has
+// reached the edge of the world.
+func (w *World) applyBoundary(object *SpaceObject) {
+	switch w.Boundary {
+	case BoundaryWall:
+		w.bounceOffEdges(object)
+	case BoundaryVoid:
+		w.removeIfOutside(object)
+	default:
+		w.wrapAroundEdges(object)
+	}
+}
+
+// bounceOffEdges turns the edge of the world into a solid wall. An object keeps
+// the same share of its speed off a wall that it would keep off another object,
+// so the edge is not a free source of energy.
+func (w *World) bounceOffEdges(object *SpaceObject) {
+	// Each edge nudges the object back inside first, so nothing can end up
+	// buried in a wall, and only reverses the velocity that is driving it in.
+	// An object already on its way out is left alone, or it would stick.
+	if object.X-object.Radius < 0 {
+		object.X = object.Radius
+		if object.VelocityX < 0 {
+			object.VelocityX = -object.VelocityX * restitution
+		}
+	}
+	if object.X+object.Radius > w.screenWidth {
+		object.X = w.screenWidth - object.Radius
+		if object.VelocityX > 0 {
+			object.VelocityX = -object.VelocityX * restitution
+		}
+	}
+	if object.Y-object.Radius < 0 {
+		object.Y = object.Radius
+		if object.VelocityY < 0 {
+			object.VelocityY = -object.VelocityY * restitution
+		}
+	}
+	if object.Y+object.Radius > w.screenHeight {
+		object.Y = w.screenHeight - object.Radius
+		if object.VelocityY > 0 {
+			object.VelocityY = -object.VelocityY * restitution
+		}
+	}
+}
+
+// removeIfOutside marks an object that has left the world entirely, leaving the
+// usual sweep to clear it out on the next step.
+func (w *World) removeIfOutside(object *SpaceObject) {
+	if object.X+object.Radius < 0 || object.X-object.Radius > w.screenWidth ||
+		object.Y+object.Radius < 0 || object.Y-object.Radius > w.screenHeight {
+		object.Mass = 0
 	}
 }
 
