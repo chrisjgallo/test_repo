@@ -14,11 +14,28 @@ const (
 	roomForError = 8
 
 	// collisionSlop widens the collision check so a pair is caught slightly
-	// before their edges actually touch. It has to be this generous because a
-	// step is a whole tick long: objects near contact are travelling more than
-	// ten units a step, so a narrower band would let them jump clean through
-	// each other between one step and the next.
+	// before their edges actually touch, rather than leaving contact to depend
+	// on two floating point positions lining up. It used to have to be generous
+	// enough to catch a fast pair mid-flight as well; substepping took that job
+	// over, and the value stayed as it was because the merge and bounce
+	// behavior is tuned around this much room.
 	collisionSlop = 10
+
+	// substepSafeFraction is the share of the narrowest collision band an
+	// object may cross in a single substep. A pair has to cover twice their
+	// band between one substep and the next to get through it unseen, so
+	// holding each of them to half a band leaves a factor of two in hand.
+	substepSafeFraction = 0.5
+
+	// maxSubsteps is where the slicing stops. A substep costs a full pass over
+	// every pair, so without a ceiling a fast enough world could price itself
+	// out of its own frame. It is set high enough that gravity alone does not
+	// reach it: the worlds that do are ones where a few survivors are flinging
+	// each other about at hundreds of units a step, and by then there are few
+	// enough of them left that the passes are cheap. Past this point collisions
+	// go back to being missable, which is the deliberate trade -- a frame that
+	// arrives beats a frame that is right.
+	maxSubsteps = 64
 
 	// restitution is the fraction of closing speed a bounce hands back. The
 	// rest goes where it goes in a real impact -- heat, sound, deformation --
@@ -246,6 +263,66 @@ func (w *World) removeDestroyed() {
 }
 
 func (w *World) handleObjectVelocityAndGravity() {
+	substeps := w.substepCount()
+	for substep := 0; substep < substeps; substep++ {
+		w.advance(1 / float64(substeps))
+	}
+}
+
+// substepCount is how many slices a step has to be taken in for the collision
+// check to see everything that happens during it.
+//
+// Taken in one go, a step is long enough for a heavy pair to pass clean through
+// each other: clear on one side at the end of one step, clear on the far side at
+// the end of the next, never once landing inside the band meant to catch them.
+// It takes no unusual speed to manage, either -- gravity at close range alone
+// can move an object further in a single step than the band is wide.
+//
+// So the worst case is worked out in advance: the fastest object there is, plus
+// the hardest shove the heaviest one can give it over a step, measured against
+// the narrowest band there is to catch anything.
+func (w *World) substepCount() int {
+	smallestRadius, fastestSpeed := math.Inf(1), 0.0
+	heaviestMass, heaviestRadius := 0.0, 0.0
+	live := 0
+
+	for i := range w.Objects {
+		object := &w.Objects[i]
+		if object.Mass == 0 {
+			continue
+		}
+
+		live++
+		smallestRadius = math.Min(smallestRadius, object.Radius)
+		fastestSpeed = math.Max(fastestSpeed, math.Hypot(object.VelocityX, object.VelocityY))
+		if object.Mass > heaviestMass {
+			heaviestMass, heaviestRadius = object.Mass, object.Radius
+		}
+	}
+
+	// Nothing to collide with, so nothing to outrun.
+	if live < 2 {
+		return 1
+	}
+
+	// The narrowest band any pair can have, and so the least room a collision
+	// has to be noticed in: two of the smallest object there is.
+	narrowestBand := 2*smallestRadius + collisionSlop
+
+	// The hardest pull anything can feel is the heaviest object's, from as close
+	// in as gravity is ever applied to it -- the edge of its own band with the
+	// smallest object going, since inside that the collision takes over.
+	pullRange := smallestRadius + heaviestRadius + collisionSlop
+	strongestPull := G * gravityScale * heaviestMass / (pullRange * pullRange)
+
+	reach := fastestSpeed + strongestPull
+	return min(max(int(math.Ceil(reach/(substepSafeFraction*narrowestBand))), 1), maxSubsteps)
+}
+
+// advance moves the world on by one slice of a step. Velocities and positions
+// are scaled by the slice; the collisions found along the way are not, since an
+// impact changes a velocity outright however long the step it lands in.
+func (w *World) advance(slice float64) {
 	for i := range w.Objects {
 		w.applyBoundary(&w.Objects[i])
 	}
@@ -253,7 +330,7 @@ func (w *World) handleObjectVelocityAndGravity() {
 	for i := range w.Objects {
 		object := &w.Objects[i]
 		if object.Mass == 0 {
-			continue // absorbed earlier in this same step
+			continue // absorbed earlier in this same slice
 		}
 
 		for j := range w.Objects {
@@ -269,7 +346,7 @@ func (w *World) handleObjectVelocityAndGravity() {
 			distance := math.Hypot(other.X-object.X, other.Y-object.Y)
 
 			// Collision. Whether the pair bounces or merges, gravity between
-			// the two is left off for this step: at touching distance the
+			// the two is left off for this slice: at touching distance the
 			// inverse-square force is enormous, and the collision has already
 			// decided what happens to them.
 			if distance < object.Radius+other.Radius+collisionSlop {
@@ -281,12 +358,12 @@ func (w *World) handleObjectVelocityAndGravity() {
 			xAcceleration := ((other.X - object.X) / distance) * force / object.Mass
 			yAcceleration := ((other.Y - object.Y) / distance) * force / object.Mass
 
-			object.VelocityX += xAcceleration
-			object.VelocityY += yAcceleration
+			object.VelocityX += xAcceleration * slice
+			object.VelocityY += yAcceleration * slice
 		}
 
-		object.X += object.VelocityX
-		object.Y += object.VelocityY
+		object.X += object.VelocityX * slice
+		object.Y += object.VelocityY * slice
 	}
 }
 

@@ -125,7 +125,7 @@ func TestABouncingPairEventuallySettles(t *testing.T) {
 	}
 
 	bounced := false
-	for step := 0; step < 5000; step++ {
+	for step := 0; step < 20000; step++ {
 		w.UpdateSpace()
 		if len(w.Objects) == 1 {
 			if !bounced {
@@ -139,7 +139,73 @@ func TestABouncingPairEventuallySettles(t *testing.T) {
 		}
 	}
 
-	t.Errorf("still %d objects after 5000 steps; the pair never settled", len(w.Objects))
+	t.Errorf("still %d objects after 20000 steps; the pair never settled", len(w.Objects))
+}
+
+// TestHeavyObjectsCannotPassThroughEachOther is the tunneling case. A step taken
+// in one go is long enough for a heavy pair to swap sides without ever colliding
+// -- clear of each other at the end of one step, clear on the far side at the
+// end of the next, never once seen inside the collision band. Nothing is thrown
+// at them here to arrange it: they are dropped from rest, and the simulation's
+// own gravity does the rest.
+func TestHeavyObjectsCannotPassThroughEachOther(t *testing.T) {
+	// Roughly a hundred spawns' worth merged together, with the radius that
+	// much area comes to. The world is large enough that neither one reaches an
+	// edge before they meet.
+	w := New(100000, 100000)
+	w.Objects = []SpaceObject{
+		{X: 49600, Y: 50000, Radius: 10, Mass: 8000},
+		{X: 50400, Y: 50000, Radius: 10, Mass: 8000},
+	}
+
+	for step := 0; step < 2000; step++ {
+		gap := w.Objects[1].X - w.Objects[0].X
+
+		w.UpdateSpace()
+
+		if len(w.Objects) < 2 {
+			return // they met and merged, which is how this ends
+		}
+		if crossed := w.Objects[1].X - w.Objects[0].X; crossed < 0 {
+			t.Fatalf("the pair passed through each other on step %d: a gap of %.1f became %.1f",
+				step, gap, crossed)
+		}
+	}
+
+	t.Fatal("the pair never met")
+}
+
+func TestStepsAreOnlySlicedWhenSomethingNeedsIt(t *testing.T) {
+	// Two freshly spawned objects, drifting: a single slice covers it, so the
+	// ordinary case pays nothing for any of this.
+	w := New(1000, 1000)
+	w.Spawn(100, 100)
+	w.Spawn(500, 100)
+
+	if got := w.substepCount(); got != 1 {
+		t.Errorf("want an ordinary pair taken in one slice, got %d", got)
+	}
+
+	// One object has nothing to collide with, however fast it is going.
+	w.Objects = []SpaceObject{{X: 500, Y: 500, Radius: 10, VelocityX: 500, Mass: 8000}}
+	if got := w.substepCount(); got != 1 {
+		t.Errorf("want a lone object taken in one slice, got %d", got)
+	}
+
+	// A pair heavy enough to fling itself across the band in one go has to be
+	// taken in several, but not more than the ceiling allows.
+	w.Objects = []SpaceObject{
+		{X: 49600, Y: 50000, Radius: 10, Mass: 8000},
+		{X: 50400, Y: 50000, Radius: 10, Mass: 8000},
+	}
+
+	got := w.substepCount()
+	if got < 2 {
+		t.Errorf("want a heavy pair sliced up, got %d", got)
+	}
+	if got > maxSubsteps {
+		t.Errorf("want no more than %d slices, got %d", maxSubsteps, got)
+	}
 }
 
 // TestObjectsDroppedInSpaceBounceBeforeSettling is the scenario you get by
