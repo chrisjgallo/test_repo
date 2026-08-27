@@ -95,7 +95,9 @@ func (s *Simulator) Update() error {
 
 func (s *Simulator) Draw(screen *ebiten.Image) {
 	screen.Fill(color.Black)
+	s.drawWorldEdge(screen)
 	s.drawSpace(screen)
+	s.drawTrajectory(screen)
 	s.drawMenusAndInfo(screen)
 }
 
@@ -104,19 +106,78 @@ func (s *Simulator) Layout(outsideWidth, outsideHeight int) (int, int) {
 	return s.screenWidth, s.screenHeight
 }
 
+// drawWorldEdge outlines where the world stops and objects wrap around.
+func (s *Simulator) drawWorldEdge(screen *ebiten.Image) {
+	left, top := s.camera.worldToScreen(0, 0)
+	right, bottom := s.camera.worldToScreen(s.world.Width(), s.world.Height())
+
+	vector.StrokeRect(
+		screen,
+		float32(left),
+		float32(top),
+		float32(right-left),
+		float32(bottom-top),
+		worldBorderWidth,
+		dimGray,
+		true,
+	)
+}
+
 func (s *Simulator) drawSpace(screen *ebiten.Image) {
 	for _, object := range s.world.Objects {
+		x, y := s.camera.worldToScreen(object.X, object.Y)
+		radius := object.Radius * s.camera.zoom
+		if radius < minDrawnRadius {
+			radius = minDrawnRadius
+		}
+
+		if s.offScreen(x, y, radius) {
+			continue
+		}
+
 		vector.DrawFilledCircle(
 			screen,
-			float32(object.X),
-			float32(object.Y),
-			float32(object.Radius),
+			float32(x),
+			float32(y),
+			float32(radius),
 			color.White,
 			true, // antialias -- small objects look like specks without it
 		)
 	}
 }
 
+// offScreen reports whether a circle falls entirely outside the view, so a
+// world far bigger than the screen costs nothing to draw the empty parts of.
+func (s *Simulator) offScreen(x, y, radius float64) bool {
+	return x+radius < 0 || y+radius < 0 ||
+		x-radius > float64(s.screenWidth) || y-radius > float64(s.screenHeight)
+}
+
+// drawTrajectory previews where an object being aimed will head once it is
+// released: a line from the spawn point out to the cursor.
+func (s *Simulator) drawTrajectory(screen *ebiten.Image) {
+	if !s.dragging {
+		return
+	}
+
+	startX, startY := s.camera.worldToScreen(s.dragStartX, s.dragStartY)
+	cursorX, cursorY := ebiten.CursorPosition()
+
+	vector.StrokeLine(
+		screen,
+		float32(startX),
+		float32(startY),
+		float32(cursorX),
+		float32(cursorY),
+		trajectoryWidth,
+		dimYellow,
+		true,
+	)
+}
+
+// drawMenusAndInfo draws everything that belongs to the screen rather than to
+// the world, so none of it moves when the view does. It only appears while
+// paused: mid-simulation the view should be nothing but space.
 func (s *Simulator) drawMenusAndInfo(screen *ebiten.Image) {
 	if !s.world.Paused {
 		return
@@ -126,4 +187,35 @@ func (s *Simulator) drawMenusAndInfo(screen *ebiten.Image) {
 		pauseBarWidth, pauseBarHeight, red, false)
 	vector.DrawFilledRect(screen, s.cornerOfScreenX+spaceBetweenPauseBars, s.cornerOfScreenY,
 		pauseBarWidth, pauseBarHeight, red, false)
+
+	s.drawStats(screen)
+}
+
+// drawStats prints a small readout in the top left while the simulation is
+// stopped and there is time to actually read it.
+func (s *Simulator) drawStats(screen *ebiten.Image) {
+	lines := []string{
+		fmt.Sprintf("Objects:  %d", len(s.world.Objects)),
+		fmt.Sprintf("Mass:     %.0f", s.world.TotalMass()),
+		fmt.Sprintf("Largest:  %.1f", s.largestRadius()),
+		fmt.Sprintf("Zoom:     %.2fx", s.camera.zoom),
+	}
+
+	for i, line := range lines {
+		ebitenutil.DebugPrintAt(screen, line, statsMargin, statsMargin+i*statsLineHeight)
+	}
+}
+
+// largestRadius is the radius of the biggest object out there, which is the
+// quickest read on how much merging has happened. It rescans on every call, but
+// the only caller is the paused readout -- so the scan happens exactly when the
+// physics loop is idle, which is cheaper than keeping a cached value honest.
+func (s *Simulator) largestRadius() float64 {
+	var largest float64
+	for _, object := range s.world.Objects {
+		if object.Radius > largest {
+			largest = object.Radius
+		}
+	}
+	return largest
 }
