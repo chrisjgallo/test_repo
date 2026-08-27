@@ -32,6 +32,11 @@ func (s *Simulator) handleUserInput() {
 		s.resetView()
 	}
 
+	if inpututil.IsKeyJustPressed(ebiten.KeyB) {
+		s.world.CycleBoundary()
+		s.boundaryLabelTicks = boundaryLabelDuration
+	}
+
 	s.camera.clampToWorld(s.world.Width(), s.world.Height())
 }
 

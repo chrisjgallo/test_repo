@@ -32,6 +32,14 @@ const (
 	// statsLineHeight is the height of a line of the built-in debug font.
 	statsMargin     = 10
 	statsLineHeight = 16
+
+	// boundaryLabelDuration is how many ticks the boundary mode stays on screen
+	// after it is switched. Long enough to read at 60 ticks a second, short
+	// enough that the view goes back to being nothing but space.
+	boundaryLabelDuration = 120
+
+	// boundaryLabelMargin insets that label from the top left corner.
+	boundaryLabelMargin = 10
 )
 
 // red matches raylib's RED, so the pause indicator looks like it did before.
@@ -70,6 +78,11 @@ type Simulator struct {
 	panning  bool
 	panLastX float64
 	panLastY float64
+
+	// boundaryLabelTicks counts down the announcement of a boundary switch.
+	// Without it the three modes are indistinguishable until something happens
+	// to reach an edge.
+	boundaryLabelTicks int
 }
 
 // New builds a simulator looking at the middle of an empty world of the given
@@ -90,6 +103,13 @@ func New(screenWidth, screenHeight, worldWidth, worldHeight int) *Simulator {
 func (s *Simulator) Update() error {
 	s.handleUserInput()
 	s.world.UpdateSpace()
+
+	// The label is part of the interface, not the simulation, so it keeps
+	// fading even while the world is paused.
+	if s.boundaryLabelTicks > 0 {
+		s.boundaryLabelTicks--
+	}
+
 	return nil
 }
 
@@ -98,6 +118,7 @@ func (s *Simulator) Draw(screen *ebiten.Image) {
 	s.drawWorldEdge(screen)
 	s.drawSpace(screen)
 	s.drawTrajectory(screen)
+	s.drawBoundaryLabel(screen)
 	s.drawMenusAndInfo(screen)
 }
 
@@ -123,6 +144,9 @@ func (s *Simulator) drawWorldEdge(screen *ebiten.Image) {
 	)
 }
 
+// drawSpace draws every object, colored by how large it has grown. The ramp
+// reads the object's own radius rather than the drawn one, so an object keeps
+// its color as the view zooms.
 func (s *Simulator) drawSpace(screen *ebiten.Image) {
 	for _, object := range s.world.Objects {
 		x, y := s.camera.worldToScreen(object.X, object.Y)
@@ -140,7 +164,7 @@ func (s *Simulator) drawSpace(screen *ebiten.Image) {
 			float32(x),
 			float32(y),
 			float32(radius),
-			color.White,
+			colorForRadius(object.Radius),
 			true, // antialias -- small objects look like specks without it
 		)
 	}
@@ -173,6 +197,18 @@ func (s *Simulator) drawTrajectory(screen *ebiten.Image) {
 		dimYellow,
 		true,
 	)
+}
+
+// drawBoundaryLabel names the boundary mode for a moment after it is switched,
+// so it is clear which of the three is in force.
+func (s *Simulator) drawBoundaryLabel(screen *ebiten.Image) {
+	if s.boundaryLabelTicks <= 0 {
+		return
+	}
+
+	ebitenutil.DebugPrintAt(screen,
+		fmt.Sprintf("Boundary: %s", s.world.Boundary),
+		boundaryLabelMargin, boundaryLabelMargin)
 }
 
 // drawMenusAndInfo draws everything that belongs to the screen rather than to
