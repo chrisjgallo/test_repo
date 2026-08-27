@@ -59,6 +59,7 @@ func (s *Simulator) Layout(outsideWidth, outsideHeight int) (int, int) {
 	return s.screenWidth, s.screenHeight
 }
 
+// drawSpace draws every object, colored by how large it has grown.
 func (s *Simulator) drawSpace(screen *ebiten.Image) {
 	for _, object := range s.world.Objects {
 		vector.DrawFilledCircle(
@@ -66,10 +67,22 @@ func (s *Simulator) drawSpace(screen *ebiten.Image) {
 			float32(object.X),
 			float32(object.Y),
 			float32(object.Radius),
-			color.White,
+			colorForRadius(object.Radius),
 			true, // antialias -- small objects look like specks without it
 		)
 	}
+}
+
+// drawBoundaryLabel names the boundary mode for a moment after it is switched,
+// so it is clear which of the three is in force.
+func (s *Simulator) drawBoundaryLabel(screen *ebiten.Image) {
+	if s.boundaryLabelTicks <= 0 {
+		return
+	}
+
+	ebitenutil.DebugPrintAt(screen,
+		fmt.Sprintf("Boundary: %s", s.world.Boundary),
+		boundaryLabelMargin, boundaryLabelMargin)
 }
 
 func (s *Simulator) drawMenusAndInfo(screen *ebiten.Image) {
