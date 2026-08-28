@@ -56,6 +56,23 @@ const (
 
 	// defaultRadius is the radius every newly spawned object starts with.
 	defaultRadius = 1.0
+
+	// starMass is the mass of a fixed star: a little over sixty spawned objects'
+	// worth, so the star rather than the crowd decides where everything goes.
+	//
+	// It is tuned against how fast a drag can throw something (velocityPerPixel,
+	// in the sim package). Launched sideways from half a screen out, an object
+	// needs about a fifth-screen drag to hold a circular orbit and about a
+	// quarter-screen one to escape the star altogether, which puts both inside a
+	// comfortable mouse movement and leaves the interesting range -- ellipses,
+	// slow inward spirals -- in between.
+	starMass = 5000
+
+	// starRadius is how large a fixed star is, to draw and to collide with.
+	// Merging would have to swallow nine hundred objects to reach it, which is
+	// well past the far end of the color ramp -- so a star is drawn in a color of
+	// its own rather than as the biggest blob on screen.
+	starRadius = 30
 )
 
 // SpaceObject is a single body in the simulation. A mass of zero marks an object
@@ -67,6 +84,11 @@ type SpaceObject struct {
 	VelocityX float64
 	VelocityY float64
 	Mass      float64
+
+	// Fixed marks an object that is anchored in place: it pulls on everything
+	// around it, and nothing -- gravity, a collision, or the edge of the world --
+	// moves it. Stars are the only thing that sets it.
+	Fixed bool
 }
 
 func (o SpaceObject) surfaceArea() float64 {
@@ -75,13 +97,20 @@ func (o SpaceObject) surfaceArea() float64 {
 
 // absorb merges other into o, conserving momentum and area, and leaves other
 // with zero mass so the next step removes it.
+//
+// A fixed o keeps the position and velocity it had: it is anchored, so the
+// momentum handed to it has nowhere to go. Mass and area still accumulate, which
+// is how a star grows -- and pulls harder -- on what it eats.
 func (o *SpaceObject) absorb(other *SpaceObject) {
 	totalMass := o.Mass + other.Mass
 
-	o.VelocityX = (o.VelocityX*o.Mass + other.VelocityX*other.Mass) / totalMass
-	o.VelocityY = (o.VelocityY*o.Mass + other.VelocityY*other.Mass) / totalMass
-	o.X = (o.X*o.Mass + other.X*other.Mass) / totalMass
-	o.Y = (o.Y*o.Mass + other.Y*other.Mass) / totalMass
+	if !o.Fixed {
+		o.VelocityX = (o.VelocityX*o.Mass + other.VelocityX*other.Mass) / totalMass
+		o.VelocityY = (o.VelocityY*o.Mass + other.VelocityY*other.Mass) / totalMass
+		o.X = (o.X*o.Mass + other.X*other.Mass) / totalMass
+		o.Y = (o.Y*o.Mass + other.Y*other.Mass) / totalMass
+	}
+
 	o.Radius = math.Sqrt((o.surfaceArea() + other.surfaceArea()) / math.Pi)
 	o.Mass = totalMass
 
@@ -98,6 +127,30 @@ func collide(object, other *SpaceObject, distance float64) {
 	// objects already marked for removal, so this only holds the line if one
 	// ever stops doing so.
 	if object.Mass <= 0 || other.Mass <= 0 {
+		return
+	}
+
+	// Two fixed objects have nothing to resolve: neither can move and neither can
+	// be moved, so overlapping stars simply coexist. Nothing reaches here with
+	// both set -- advance skips fixed objects in the outer loop, so a fixed pair
+	// is never examined from either side -- but if that ever changes, leaving them
+	// alone is the answer that matches what the loop does today. Absorbing would
+	// have one star quietly eat the other.
+	if object.Fixed && other.Fixed {
+		return
+	}
+
+	// A fixed object gives no ground: it swallows whatever reaches it and stays
+	// where it is. Nothing below applies to it. There is no bounce to divide up,
+	// since one side of the pair cannot take any of it -- the impulse would come
+	// back off something immovable entirely into whatever hit it -- and so no
+	// bounce for the merge test to weigh either. All that is left to decide is
+	// which one absorbs, and being fixed decides it.
+	if object.Fixed || other.Fixed {
+		if other.Fixed {
+			object, other = other, object
+		}
+		object.absorb(other)
 		return
 	}
 
@@ -243,6 +296,25 @@ func (w *World) SpawnMoving(x, y, velocityX, velocityY float64) {
 	})
 }
 
+// SpawnStar adds a fixed star at the given position: far heavier than anything
+// spawned by hand, anchored where it is put, and fatal to whatever runs into it.
+// Nothing stops a world having several, though one in the middle is the point of
+// them -- everything else then has something to fall around.
+//
+// Several stars do not make a system of their own: stars are inert towards each
+// other, with no mutual gravity and no collision, since advance skips fixed
+// objects in the outer loop and so never examines a fixed pair from either side.
+// Each one pulls on everything that can move, and they ignore one another.
+func (w *World) SpawnStar(x, y float64) {
+	w.Objects = append(w.Objects, SpaceObject{
+		X:      x,
+		Y:      y,
+		Radius: starRadius,
+		Mass:   starMass,
+		Fixed:  true,
+	})
+}
+
 // CycleBoundary moves on to the next way of treating the edge of the world.
 func (w *World) CycleBoundary() {
 	w.Boundary = (w.Boundary + 1) % boundaryModeCount
@@ -291,6 +363,14 @@ func (w *World) handleObjectVelocityAndGravity() {
 	for substep := 0; substep < substeps; substep++ {
 		w.advance(1 / float64(substeps))
 	}
+}
+
+// Substeps is how many slices the next step will be taken in, which is the cost
+// of that step laid bare: the whole pair loop runs once per slice. It climbs with
+// the strongest gravity in the world, so a star -- and above all a star that has
+// been eating -- is usually what sets it. See BenchmarkStep for what that costs.
+func (w *World) Substeps() int {
+	return w.substepCount()
 }
 
 // substepCount is how many slices a step has to be taken in for the collision
@@ -357,6 +437,14 @@ func (w *World) advance(slice float64) {
 			continue // absorbed earlier in this same slice
 		}
 
+		// A fixed object pulls on everything and is moved by nothing, so there is
+		// no acceleration to add up and no position to advance from its point of
+		// view. Its collisions are still caught, from the other half of the pair:
+		// every pair comes up once from each side.
+		if object.Fixed {
+			continue
+		}
+
 		for j := range w.Objects {
 			if i == j {
 				continue
@@ -375,6 +463,17 @@ func (w *World) advance(slice float64) {
 			// decided what happens to them.
 			if distance < object.Radius+other.Radius+collisionSlop {
 				collide(object, other, distance)
+
+				// Ordinarily the object being worked on is the one left standing
+				// after a collision, whichever way it goes: a merge is always the
+				// outer object absorbing the inner one. A fixed object is the
+				// exception -- it does the absorbing whichever side of the pair it
+				// turns up on -- so this is the one collision that can leave the
+				// object under consideration at zero mass, with nothing further to
+				// work out and a zero mass to divide the next pair's force by.
+				if object.Mass == 0 {
+					break
+				}
 				continue
 			}
 
@@ -394,6 +493,12 @@ func (w *World) advance(slice float64) {
 // applyBoundary does whatever the current mode says to an object that has
 // reached the edge of the world.
 func (w *World) applyBoundary(object *SpaceObject) {
+	// A fixed object is exempt from all three modes: every one of them either
+	// moves an object or takes it away, and a fixed object stays where it was put.
+	if object.Fixed {
+		return
+	}
+
 	switch w.Boundary {
 	case BoundaryWall:
 		w.bounceOffEdges(object)

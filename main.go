@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"log"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -19,10 +20,17 @@ const (
 )
 
 func main() {
+	// The star is off by default, so plain `go run .` still opens on empty space
+	// and the world is whatever you put in it.
+	centralStar := flag.Bool("star", false,
+		"begin with a fixed, massive star at the middle of the world")
+	flag.Parse()
+
 	ebiten.SetWindowSize(screenWidth, screenHeight)
 	ebiten.SetWindowTitle("Space Simulator")
 
-	if err := ebiten.RunGame(sim.New(screenWidth, screenHeight, worldWidth, worldHeight)); err != nil {
+	game := sim.New(screenWidth, screenHeight, worldWidth, worldHeight, *centralStar)
+	if err := ebiten.RunGame(game); err != nil {
 		log.Fatal(err)
 	}
 }

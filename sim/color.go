@@ -19,6 +19,21 @@ var colorRamp = []colorStop{
 	{radius: 16, color: color.RGBA{R: 235, G: 75, B: 50, A: 255}},
 }
 
+// starColor fills a fixed star, which is off the ramp rather than at the top of
+// it. A star's radius does grow as it eats -- absorb conserves area for a fixed
+// object as much as for any other, so thirty becomes about thirty-five after
+// three hundred meals -- but it is born past the far end of the ramp and only
+// climbs from there. The ramp means "this is how much I have eaten", and read
+// through it a star would be pinned at the hottest color from its first tick,
+// reporting hundreds of meals it has not had and then never moving again.
+//
+// It is not what tells a star from a big merge, though -- size is, at thirty
+// against the handful a merge reaches. The ramp sweeps a continuous path from
+// blue through white to red, so every near-white lies close to some point on it;
+// this one is a couple of shades off the color of a radius-4 object. Warm, on the
+// grounds that the thing in the middle of a solar system is a sun.
+var starColor = color.RGBA{R: 255, G: 241, B: 200, A: 255}
+
 // colorStop pins a color to a radius. Anything between two stops is mixed from
 // the pair, and anything past the ends takes the end's color unchanged.
 type colorStop struct {
