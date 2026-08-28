@@ -20,8 +20,12 @@ var colorRamp = []colorStop{
 }
 
 // starColor fills a fixed star, which is off the ramp rather than at the top of
-// it: a star's size is fixed at birth, so running it through a scale that means
-// "this is how much I have eaten" would be reporting something untrue.
+// it. A star's radius does grow as it eats -- absorb conserves area for a fixed
+// object as much as for any other, so thirty becomes about thirty-five after
+// three hundred meals -- but it is born past the far end of the ramp and only
+// climbs from there. The ramp means "this is how much I have eaten", and read
+// through it a star would be pinned at the hottest color from its first tick,
+// reporting hundreds of meals it has not had and then never moving again.
 //
 // It is not what tells a star from a big merge, though -- size is, at thirty
 // against the handful a merge reaches. The ramp sweeps a continuous path from

@@ -1,6 +1,10 @@
 package sim
 
-import "testing"
+import (
+	"fmt"
+	"strings"
+	"testing"
+)
 
 // The screen and world sizes main.go launches with, so the wiring is checked at
 // the proportions it actually runs at.
@@ -83,4 +87,51 @@ func TestStatsWithoutAStarReportNoStar(t *testing.T) {
 	if got := s.spawnedStats().starMass; got != 0 {
 		t.Errorf("want no star mass in a starless world, got %v", got)
 	}
+	if line, ok := statsLine(s, "Total:"); ok {
+		t.Errorf("a starless world's Total would only repeat Mass, got %q", line)
+	}
+}
+
+// TestStatsReportTheConservedTotal covers the figure holding the star apart costs
+// the readout: with the star on its own line, no line adds up to the quantity
+// merging actually conserves unless Total is there to do it.
+func TestStatsReportTheConservedTotal(t *testing.T) {
+	s := New(testScreenWidth, testScreenHeight, testWorldWidth, testWorldHeight, true)
+	s.world.Spawn(100, 100)
+	s.world.Spawn(200, 200)
+
+	stats := s.spawnedStats()
+	line, ok := statsLine(s, "Total:")
+	if !ok {
+		t.Fatalf("want a Total line in a world with a star, got %q", s.statsLines())
+	}
+	if want := fmt.Sprintf("Total:    %.0f", stats.mass+stats.starMass); line != want {
+		t.Errorf("want %q, got %q", want, line)
+	}
+}
+
+// TestStatsReportSubsteps pins the cost line: a star drives the substep count up
+// on its own, and the readout is where that becomes visible instead of just being
+// felt as a slower frame.
+func TestStatsReportSubsteps(t *testing.T) {
+	s := New(testScreenWidth, testScreenHeight, testWorldWidth, testWorldHeight, true)
+	s.world.Spawn(100, 100)
+
+	line, ok := statsLine(s, "Substeps:")
+	if !ok {
+		t.Fatalf("want a Substeps line, got %q", s.statsLines())
+	}
+	if want := fmt.Sprintf("Substeps: %d", s.world.Substeps()); line != want {
+		t.Errorf("want %q, got %q", want, line)
+	}
+}
+
+// statsLine finds the readout line beginning with the given label.
+func statsLine(s *Simulator, label string) (string, bool) {
+	for _, line := range s.statsLines() {
+		if strings.HasPrefix(line, label) {
+			return line, true
+		}
+	}
+	return "", false
 }

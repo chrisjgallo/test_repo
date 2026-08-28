@@ -242,13 +242,21 @@ func (s *Simulator) drawMenusAndInfo(screen *ebiten.Image) {
 
 // drawStats prints a small readout in the top left while the simulation is
 // stopped and there is time to actually read it.
+func (s *Simulator) drawStats(screen *ebiten.Image) {
+	for i, line := range s.statsLines() {
+		ebitenutil.DebugPrintAt(screen, line, statsMargin, statsMargin+i*statsLineHeight)
+	}
+}
+
+// statsLines is what the readout says, split out from drawing it so it can be
+// checked without a screen to say it on.
 //
 // The first three lines are about the objects a run has spawned, and the stars
 // are held out of all three rather than some of them: a star is placed once at
 // launch instead of being spawned, and it is heavy and large enough to be the
 // only thing any figure it appears in would report. It gets a line to itself
 // instead, since watching its mass climb is watching it eat.
-func (s *Simulator) drawStats(screen *ebiten.Image) {
+func (s *Simulator) statsLines() []string {
 	stats := s.spawnedStats()
 
 	lines := []string{
@@ -256,14 +264,27 @@ func (s *Simulator) drawStats(screen *ebiten.Image) {
 		fmt.Sprintf("Mass:     %.0f", stats.mass),
 		fmt.Sprintf("Largest:  %.1f", stats.largest),
 	}
-	if stats.starMass > 0 {
-		lines = append(lines, fmt.Sprintf("Star:     %.0f", stats.starMass))
-	}
-	lines = append(lines, fmt.Sprintf("Zoom:     %.2fx", s.camera.zoom))
 
-	for i, line := range lines {
-		ebitenutil.DebugPrintAt(screen, line, statsMargin, statsMargin+i*statsLineHeight)
+	if stats.starMass > 0 {
+		// Holding the star out of Mass costs the one figure the readout used to
+		// make plain: that merging never loses any. Total puts it back, since
+		// adding two lines up by eye is not watching an invariant hold. In a
+		// world with no star it would only ever repeat Mass, so it is not there.
+		lines = append(lines,
+			fmt.Sprintf("Star:     %.0f", stats.starMass),
+			fmt.Sprintf("Total:    %.0f", s.world.TotalMass()))
 	}
+
+	// Substeps is the one line here about cost rather than contents. A step is
+	// sliced as finely as the strongest gravity in the world demands, and the
+	// whole pair loop runs once per slice -- so a star fattening on what it eats
+	// can quietly take a world from a slice a step to dozens. Without this the
+	// frame rate falls away with nothing on screen accounting for it.
+	lines = append(lines,
+		fmt.Sprintf("Substeps: %d", s.world.Substeps()),
+		fmt.Sprintf("Zoom:     %.2fx", s.camera.zoom))
+
+	return lines
 }
 
 // spawned is the paused readout's account of a run: how much there is, how much

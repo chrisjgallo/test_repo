@@ -130,6 +130,16 @@ func collide(object, other *SpaceObject, distance float64) {
 		return
 	}
 
+	// Two fixed objects have nothing to resolve: neither can move and neither can
+	// be moved, so overlapping stars simply coexist. Nothing reaches here with
+	// both set -- advance skips fixed objects in the outer loop, so a fixed pair
+	// is never examined from either side -- but if that ever changes, leaving them
+	// alone is the answer that matches what the loop does today. Absorbing would
+	// have one star quietly eat the other.
+	if object.Fixed && other.Fixed {
+		return
+	}
+
 	// A fixed object gives no ground: it swallows whatever reaches it and stays
 	// where it is. Nothing below applies to it. There is no bounce to divide up,
 	// since one side of the pair cannot take any of it -- the impulse would come
@@ -290,6 +300,11 @@ func (w *World) SpawnMoving(x, y, velocityX, velocityY float64) {
 // spawned by hand, anchored where it is put, and fatal to whatever runs into it.
 // Nothing stops a world having several, though one in the middle is the point of
 // them -- everything else then has something to fall around.
+//
+// Several stars do not make a system of their own: stars are inert towards each
+// other, with no mutual gravity and no collision, since advance skips fixed
+// objects in the outer loop and so never examines a fixed pair from either side.
+// Each one pulls on everything that can move, and they ignore one another.
 func (w *World) SpawnStar(x, y float64) {
 	w.Objects = append(w.Objects, SpaceObject{
 		X:      x,
@@ -348,6 +363,14 @@ func (w *World) handleObjectVelocityAndGravity() {
 	for substep := 0; substep < substeps; substep++ {
 		w.advance(1 / float64(substeps))
 	}
+}
+
+// Substeps is how many slices the next step will be taken in, which is the cost
+// of that step laid bare: the whole pair loop runs once per slice. It climbs with
+// the strongest gravity in the world, so a star -- and above all a star that has
+// been eating -- is usually what sets it. See BenchmarkStep for what that costs.
+func (w *World) Substeps() int {
+	return w.substepCount()
 }
 
 // substepCount is how many slices a step has to be taken in for the collision
