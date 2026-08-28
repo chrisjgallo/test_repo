@@ -49,7 +49,12 @@ const (
 	// gravityScale is how much stronger this simulation's gravity is than the
 	// plain inverse-square law. It lives inside forceOfGravity; escapeSpeed has
 	// to use the same number to agree with it.
-	gravityScale = 10
+	//
+	// Turned down from ten: falls are gentler, a badly aimed object gets further
+	// before it is hauled back, and an orbit takes a slightly shorter drag to
+	// set up. Speeds scale as the square root of this, so a fifth off it is
+	// about a tenth off everything it drives.
+	gravityScale = 8
 
 	// defaultMass is the mass every newly spawned object starts with.
 	defaultMass = 80

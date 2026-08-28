@@ -162,7 +162,14 @@ func (s *Simulator) drawSpace(screen *ebiten.Image) {
 			radius = minDrawnRadius
 		}
 
-		if s.offScreen(x, y, radius) {
+		// A star's halo reaches well past its disc, so the halo is what decides
+		// whether there is anything of the star left on screen to draw.
+		extent := radius
+		if object.Fixed {
+			extent = radius * glowRadiusScale
+		}
+
+		if s.offScreen(x, y, extent) {
 			continue
 		}
 
@@ -170,6 +177,7 @@ func (s *Simulator) drawSpace(screen *ebiten.Image) {
 		fill := colorForRadius(object.Radius)
 		if object.Fixed {
 			fill = starColor
+			s.drawGlow(screen, x, y, radius)
 		}
 
 		vector.DrawFilledCircle(
@@ -179,6 +187,28 @@ func (s *Simulator) drawSpace(screen *ebiten.Image) {
 			float32(radius),
 			fill,
 			true, // antialias -- small objects look like specks without it
+		)
+	}
+}
+
+// drawGlow lays a soft halo of light around a star, under the star itself: a
+// stack of translucent circles, widest and so faintest first, each one adding to
+// what is already there. Space is black and everything in it is a flat disc, so
+// without this the one object that is meant to be a source of light looks like
+// the same cut-out shape as the rocks falling into it.
+//
+// The radius is the drawn one, so the halo zooms with the star. It is not
+// clamped the way the disc is: a star zoomed out to a speck has a halo of a few
+// pixels, which is the right amount of nothing.
+func (s *Simulator) drawGlow(screen *ebiten.Image, x, y, radius float64) {
+	for _, layer := range glowLayers(radius) {
+		vector.DrawFilledCircle(
+			screen,
+			float32(x),
+			float32(y),
+			float32(layer.radius),
+			layer.color,
+			true, // antialias -- a hard edge on a faint circle reads as a ring
 		)
 	}
 }

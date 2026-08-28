@@ -136,8 +136,8 @@ func ExampleWorld_Substeps() {
 			meals, star.Mass, star.Radius, w.Substeps())
 	}
 	// Output:
-	// meals    0: mass   5000  radius 30.0  substeps 4
-	// meals  300: mass  29000  radius 34.6  substeps 16
-	// meals 1000: mass  85000  radius 43.6  substeps 32
-	// meals 3000: mass 245000  radius 62.4  substeps 51
+	// meals    0: mass   5000  radius 30.0  substeps 3
+	// meals  300: mass  29000  radius 34.6  substeps 13
+	// meals 1000: mass  85000  radius 43.6  substeps 26
+	// meals 3000: mass 245000  radius 62.4  substeps 41
 }

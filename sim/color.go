@@ -80,3 +80,59 @@ func blend(from, to color.RGBA, progress float64) color.RGBA {
 func mix(from, to uint8, progress float64) uint8 {
 	return uint8(float64(from) + (float64(to)-float64(from))*progress)
 }
+
+const (
+	// glowRadiusScale is how far a star's halo reaches, as a multiple of the
+	// star's own radius. Three is wide enough to read as light coming off the
+	// thing rather than as a fatter star, and still narrow enough that an object
+	// falling in is visible against it for most of the way down.
+	glowRadiusScale = 3.0
+
+	// glowLayerCount is how many circles the halo is built from. Each one is a
+	// hard edge, so too few show up as visible rings; six is past the point
+	// where the banding is noticeable at the sizes a star is drawn at.
+	glowLayerCount = 6
+
+	// glowLayerAlpha is how opaque a single layer is. They stack, so the halo
+	// ends up around a third opaque where it meets the star and one layer's
+	// worth of nothing at its outer edge -- a light glow, which is the point:
+	// the star should still be plainly the brightest thing on the screen.
+	glowLayerAlpha = 24
+)
+
+// glowColor is the halo's color: the star's own, thinned right down. Anything
+// cooler would read as a separate object hanging around the star rather than as
+// its light.
+//
+// It is NRGBA rather than RGBA because the drawing code takes colors as
+// premultiplied, which is what RGBA means in this package's terms and would
+// need the channels scaled down by hand to match the alpha. NRGBA converts on
+// the way through instead, so the channels here are the color as written.
+var glowColor = color.NRGBA{R: starColor.R, G: starColor.G, B: starColor.B, A: glowLayerAlpha}
+
+// glowLayer is one circle of a star's halo.
+type glowLayer struct {
+	radius float64
+	color  color.NRGBA
+}
+
+// glowLayers is the halo to draw around a star of the given drawn radius,
+// outermost first, so that drawing them in order stacks the alpha up towards
+// the middle and the halo fades outwards on its own.
+//
+// The innermost layer stops short of the star rather than sitting on it: the
+// star is drawn opaque on top, so a layer under it would be hidden and the
+// falloff would start a step in from the edge.
+func glowLayers(radius float64) []glowLayer {
+	step := (glowRadiusScale - 1) / glowLayerCount
+
+	layers := make([]glowLayer, 0, glowLayerCount)
+	for i := 0; i < glowLayerCount; i++ {
+		layers = append(layers, glowLayer{
+			radius: radius * (glowRadiusScale - float64(i)*step),
+			color:  glowColor,
+		})
+	}
+
+	return layers
+}

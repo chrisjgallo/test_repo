@@ -78,3 +78,74 @@ func difference(a, b uint8) int {
 	}
 	return int(b) - int(a)
 }
+
+func TestTheGlowSitsBetweenTheStarAndItsOuterEdge(t *testing.T) {
+	const radius = 30.0
+
+	layers := glowLayers(radius)
+	if len(layers) != glowLayerCount {
+		t.Fatalf("want %d layers, got %d", glowLayerCount, len(layers))
+	}
+
+	for i, layer := range layers {
+		// Anything at or inside the star's own radius is drawn over by the star,
+		// and anything past the outer edge is a halo wider than advertised --
+		// which the off-screen check is sized against.
+		if layer.radius <= radius || layer.radius > radius*glowRadiusScale {
+			t.Errorf("layer %d: radius %v is outside (%v, %v]",
+				i, layer.radius, radius, radius*glowRadiusScale)
+		}
+	}
+}
+
+func TestTheGlowIsDrawnOutermostFirst(t *testing.T) {
+	// The layers stack their alpha up as they are drawn, so the order is what
+	// makes the halo brightest against the star and faintest at its edge.
+	layers := glowLayers(30)
+
+	for i := 1; i < len(layers); i++ {
+		if layers[i].radius >= layers[i-1].radius {
+			t.Errorf("layer %d (%v) should be inside layer %d (%v)",
+				i, layers[i].radius, i-1, layers[i-1].radius)
+		}
+	}
+}
+
+func TestTheGlowStaysAGlow(t *testing.T) {
+	// Stacked, the layers have to come out translucent: a halo that reaches
+	// opaque is a bigger star with a hard edge, not light coming off one.
+	clear := 1.0
+	for _, layer := range glowLayers(30) {
+		if layer.color.A == 0 || layer.color.A == 255 {
+			t.Fatalf("want a translucent layer, got alpha %d", layer.color.A)
+		}
+		clear *= 1 - float64(layer.color.A)/255
+	}
+
+	if opacity := 1 - clear; opacity > 0.5 {
+		t.Errorf("want the halo under half opaque where it meets the star, got %.2f", opacity)
+	}
+}
+
+func TestTheGlowZoomsWithTheStar(t *testing.T) {
+	// The halo is built from the drawn radius, so it tracks the zoom rather than
+	// hanging at a fixed size around a star that has grown or shrunk on screen.
+	near, far := glowLayers(60), glowLayers(30)
+
+	for i := range far {
+		if near[i].radius != 2*far[i].radius {
+			t.Errorf("layer %d: want %v at twice the radius, got %v",
+				i, 2*far[i].radius, near[i].radius)
+		}
+	}
+}
+
+func TestTheGlowIsTheStarsOwnColor(t *testing.T) {
+	// A halo in any other hue reads as a separate object around the star.
+	for i, layer := range glowLayers(30) {
+		if layer.color.R != starColor.R || layer.color.G != starColor.G ||
+			layer.color.B != starColor.B {
+			t.Errorf("layer %d: want the star's color %v, got %v", i, starColor, layer.color)
+		}
+	}
+}
