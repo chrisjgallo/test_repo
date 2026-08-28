@@ -5,6 +5,15 @@ import (
 	"testing"
 )
 
+// fallBudget is how long TestStarStaysPutWhilePullingHard waits for an object
+// dropped six hundred units out to reach the star. The fall takes about ninety
+// steps at the current starMass, and the budget is deliberately several times
+// that: what the test is for is that the fall happens at all and that the star
+// does not budge while it does, so a bound tight enough to notice a retuned star
+// would only ever be a thing to come back and fix. Time to fall goes as the
+// inverse square root of the star's mass, so this covers dividing it by ten.
+const fallBudget = 300
+
 // TestStarStaysPutWhilePullingHard drops an object next to a star and checks the
 // star is unmoved by it -- through the fall, the impact, and the merge. The star
 // is object zero throughout: the sweep that clears absorbed objects keeps the
@@ -15,7 +24,7 @@ func TestStarStaysPutWhilePullingHard(t *testing.T) {
 	w.Spawn(1600, 1000)
 
 	eaten := false
-	for step := 0; step < 100; step++ {
+	for step := 0; step < fallBudget; step++ {
 		w.UpdateSpace()
 
 		star := w.Objects[0]
@@ -33,11 +42,10 @@ func TestStarStaysPutWhilePullingHard(t *testing.T) {
 		}
 	}
 
-	// Falling from six hundred units out, the object should have reached the star
-	// well inside a hundred steps. If it has not, the pull is not strong enough
-	// to be worth calling a star.
+	// Falling from six hundred units out, the object should have reached the star.
+	// If it has not, the pull is not strong enough to be worth calling a star.
 	if !eaten {
-		t.Errorf("object never reached the star in 100 steps: %+v", w.Objects[1])
+		t.Errorf("object never reached the star in %d steps: %+v", fallBudget, w.Objects[1])
 	}
 }
 
@@ -155,11 +163,14 @@ func TestStarHoldsAnObjectInOrbit(t *testing.T) {
 			t.Fatalf("step %d: object left orbit -- eaten or gone", step)
 		}
 
-		// A circular orbit stays at its radius. The tolerance is loose enough for
-		// the drift a fixed-step integrator accumulates over a few laps, and tight
-		// enough that falling in or spiralling out would fail it.
+		// A circular orbit stays at its radius. Two percent is more than fifteen
+		// times the drift actually observed here -- an eighth of a percent, and not
+		// growing, since stepping the velocity before the position makes this
+		// integrator symplectic and so stable in energy. A looser band than this
+		// would sit there quietly while an orbit decayed by a third, which is the
+		// whole class of regression the test is for.
 		distance := distanceBetween(w.Objects[0], w.Objects[1])
-		if distance < radius*0.5 || distance > radius*1.5 {
+		if distance < radius*0.98 || distance > radius*1.02 {
 			t.Fatalf("step %d: orbit radius drifted to %v, want near %v",
 				step, distance, float64(radius))
 		}

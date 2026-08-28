@@ -242,36 +242,61 @@ func (s *Simulator) drawMenusAndInfo(screen *ebiten.Image) {
 
 // drawStats prints a small readout in the top left while the simulation is
 // stopped and there is time to actually read it.
+//
+// The first three lines are about the objects a run has spawned, and the stars
+// are held out of all three rather than some of them: a star is placed once at
+// launch instead of being spawned, and it is heavy and large enough to be the
+// only thing any figure it appears in would report. It gets a line to itself
+// instead, since watching its mass climb is watching it eat.
 func (s *Simulator) drawStats(screen *ebiten.Image) {
+	stats := s.spawnedStats()
+
 	lines := []string{
-		fmt.Sprintf("Objects:  %d", len(s.world.Objects)),
-		fmt.Sprintf("Mass:     %.0f", s.world.TotalMass()),
-		fmt.Sprintf("Largest:  %.1f", s.largestRadius()),
-		fmt.Sprintf("Zoom:     %.2fx", s.camera.zoom),
+		fmt.Sprintf("Objects:  %d", stats.count),
+		fmt.Sprintf("Mass:     %.0f", stats.mass),
+		fmt.Sprintf("Largest:  %.1f", stats.largest),
 	}
+	if stats.starMass > 0 {
+		lines = append(lines, fmt.Sprintf("Star:     %.0f", stats.starMass))
+	}
+	lines = append(lines, fmt.Sprintf("Zoom:     %.2fx", s.camera.zoom))
 
 	for i, line := range lines {
 		ebitenutil.DebugPrintAt(screen, line, statsMargin, statsMargin+i*statsLineHeight)
 	}
 }
 
-// largestRadius is the radius of the biggest object out there, which is the
-// quickest read on how much merging has happened. It rescans on every call, but
-// the only caller is the paused readout -- so the scan happens exactly when the
-// physics loop is idle, which is cheaper than keeping a cached value honest.
-//
-// Stars sit it out. One starts larger than any amount of merging is likely to
-// reach, so counting it would pin the number to the star and say nothing about
-// what the rest of the world has been doing.
-func (s *Simulator) largestRadius() float64 {
-	var largest float64
+// spawned is the paused readout's account of a run: how much there is, how much
+// of it there is by mass, and how far merging has got, counting only the objects
+// the run itself put there.
+type spawned struct {
+	count   int
+	mass    float64
+	largest float64
+
+	// starMass is the mass of the stars left out of the three figures above, and
+	// zero in a world without any.
+	starMass float64
+}
+
+// spawnedStats collects all of it in a single scan. It rescans on every call,
+// but the only caller is the paused readout -- so the scan happens exactly when
+// the physics loop is idle, which is cheaper than keeping cached values honest.
+func (s *Simulator) spawnedStats() spawned {
+	var stats spawned
+
 	for _, object := range s.world.Objects {
 		if object.Fixed {
+			stats.starMass += object.Mass
 			continue
 		}
-		if object.Radius > largest {
-			largest = object.Radius
+
+		stats.count++
+		stats.mass += object.Mass
+		if object.Radius > stats.largest {
+			stats.largest = object.Radius
 		}
 	}
-	return largest
+
+	return stats
 }

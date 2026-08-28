@@ -57,12 +57,16 @@ const (
 	// defaultRadius is the radius every newly spawned object starts with.
 	defaultRadius = 1.0
 
-	// starMass is the mass of a fixed star. It is a couple of hundred spawned
-	// objects' worth, enough that the star rather than the crowd decides where
-	// everything goes: at about a screen's distance the speed needed to orbit it
-	// works out close to the fastest launch a full-screen drag can give, so a
-	// hard throw across the view is roughly the throw that ends up in orbit.
-	starMass = 20000
+	// starMass is the mass of a fixed star: a little over sixty spawned objects'
+	// worth, so the star rather than the crowd decides where everything goes.
+	//
+	// It is tuned against how fast a drag can throw something (velocityPerPixel,
+	// in the sim package). Launched sideways from half a screen out, an object
+	// needs about a fifth-screen drag to hold a circular orbit and about a
+	// quarter-screen one to escape the star altogether, which puts both inside a
+	// comfortable mouse movement and leaves the interesting range -- ellipses,
+	// slow inward spirals -- in between.
+	starMass = 5000
 
 	// starRadius is how large a fixed star is, to draw and to collide with.
 	// Merging would have to swallow nine hundred objects to reach it, which is

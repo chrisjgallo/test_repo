@@ -19,11 +19,15 @@ var colorRamp = []colorStop{
 	{radius: 16, color: color.RGBA{R: 235, G: 75, B: 50, A: 255}},
 }
 
-// starColor fills a fixed star. It sits off the end of the ramp rather than at
-// the top of it: a star's size says nothing about how much it has eaten, and it
-// should read as its own kind of thing rather than as the largest blob on
-// screen. Near-white with a warm cast, so it stays the brightest thing out
-// there however red the giants around it get.
+// starColor fills a fixed star, which is off the ramp rather than at the top of
+// it: a star's size is fixed at birth, so running it through a scale that means
+// "this is how much I have eaten" would be reporting something untrue.
+//
+// It is not what tells a star from a big merge, though -- size is, at thirty
+// against the handful a merge reaches. The ramp sweeps a continuous path from
+// blue through white to red, so every near-white lies close to some point on it;
+// this one is a couple of shades off the color of a radius-4 object. Warm, on the
+// grounds that the thing in the middle of a solar system is a sun.
 var starColor = color.RGBA{R: 255, G: 241, B: 200, A: 255}
 
 // colorStop pins a color to a radius. Anything between two stops is mixed from
